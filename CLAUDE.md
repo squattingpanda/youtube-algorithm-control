@@ -152,3 +152,26 @@ Always commit changes after completing and testing any instructed change.
 - Show/hide count badge on extension icon
 - Sidebar video filtering (ytd-compact-video-renderer)
 - Mobile app (WebView wrapper per brief)
+
+## Session: 2025-02-01 — Spinner/Badge Overlays & Performance Tuning
+**What was done:**
+- Added model rotation across 3 Gemini models (2.5-flash, 2.5-flash-lite, 3-flash) with independent rate limits
+- Reduced initial delay to 500ms and debounce to 800ms for faster perceived response
+- Added loading spinner overlay (top-right of thumbnail) while videos are being scored
+- Spinner replaced by colored score badge (green/yellow/red percentage) once scored
+- Changed filtering to never fully hide videos — minimum opacity 0.15 for testing visibility
+- Opacity gradient: score 0 → 0.15, mid → 0.4, above dim threshold → 1.0
+- Error recovery removes spinners and restores full visibility
+- resetAllFilters() cleans up all overlays (spinners + badges)
+
+**What's working:**
+- Full pipeline with visual feedback: spinners → badges → opacity filtering ✅
+- 3-model rotation with per-model cooldowns ✅
+- Nothing fully hidden — all videos remain visible at varying opacity for testing
+
+**What needs testing:**
+- Reload extension, refresh YouTube → spinners should appear on thumbnails
+- After ~2-5s, spinners replaced by percentage badges with color coding
+- Low-scoring videos dimmed but still visible (not hidden)
+- Hover over dimmed video → restores to full opacity
+- Change strictness → instant re-filter with updated badges
