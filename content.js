@@ -166,12 +166,20 @@ async function processVideos() {
 }
 
 // YouTube is an SPA — content loads dynamically. We use a MutationObserver
-// to detect when new video elements appear.
+// to detect when new video elements appear. Only re-score when the video
+// count actually changes (avoids hammering the API on unrelated DOM changes).
 let debounceTimer = null;
+let lastVideoCount = 0;
 
 const observer = new MutationObserver(() => {
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(processVideos, 2000);
+  debounceTimer = setTimeout(() => {
+    const currentCount = document.querySelectorAll('ytd-rich-item-renderer').length;
+    if (currentCount !== lastVideoCount) {
+      lastVideoCount = currentCount;
+      processVideos();
+    }
+  }, 2000);
 });
 
 observer.observe(document.body, { childList: true, subtree: true });

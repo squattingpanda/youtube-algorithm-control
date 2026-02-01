@@ -79,27 +79,17 @@ ${videoList}
 Respond with ONLY a JSON array of numbers, one score per video, in the same order.
 Example: [0.9, 0.2, 0.7]`;
 
-  // Retry with exponential backoff on 429
-  const MAX_RETRIES = 3;
+  // Single attempt — no retries here. Content script handles cooldown on 429.
+  // Retrying in the background burns through the free tier's 2 RPM quota.
   let lastResponse;
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    if (attempt > 0) {
-      const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
-      console.log(`[YT-Control BG] Rate limited, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${MAX_RETRIES + 1})`);
-      await new Promise(r => setTimeout(r, delay));
-    }
-
-    lastResponse = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
-      })
-    });
-
-    if (lastResponse.status !== 429) break;
-  }
+  lastResponse = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }]
+    })
+  });
 
   try {
     if (!lastResponse.ok) {
