@@ -20,7 +20,7 @@ let filteringEnabled = true;
 let currentStrictness = 3;
 let scoringInProgress = false;
 let lastErrorTime = 0;
-const ERROR_COOLDOWN = 60000; // Wait 60s before retrying after an error
+const ERROR_COOLDOWN = 15000; // Wait 15s before retrying after an error
 
 // Score map: DOM element → score (for instant re-filter on strictness change)
 const scoreMap = new WeakMap();
