@@ -115,33 +115,130 @@ function parseVideoElement(item) {
   return { title, channel, url, thumbnail, duration, meta, element: item };
 }
 
+// Inject CSS for spinner overlay once
+const style = document.createElement('style');
+style.textContent = `
+  .ytc-spinner {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(255,255,255,0.3);
+    border-top: 3px solid #fff;
+    border-radius: 50%;
+    animation: ytc-spin 0.8s linear infinite;
+    z-index: 100;
+    pointer-events: none;
+  }
+  .ytc-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    min-width: 24px;
+    height: 24px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    z-index: 100;
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  @keyframes ytc-spin {
+    to { transform: rotate(360deg); }
+  }
+`;
+document.head.appendChild(style);
+
+// Add spinner to a video's thumbnail area
+function addSpinner(element) {
+  if (element.querySelector('.ytc-spinner')) return;
+  const thumb = element.querySelector('yt-thumbnail-view-model');
+  if (!thumb) return;
+  thumb.style.position = 'relative';
+  const spinner = document.createElement('div');
+  spinner.className = 'ytc-spinner';
+  thumb.appendChild(spinner);
+}
+
+// Replace spinner with score badge
+function replaceSpinnerWithBadge(element, score) {
+  const thumb = element.querySelector('yt-thumbnail-view-model');
+  if (!thumb) return;
+  // Remove spinner
+  const spinner = thumb.querySelector('.ytc-spinner');
+  if (spinner) spinner.remove();
+  // Remove old badge
+  const oldBadge = thumb.querySelector('.ytc-badge');
+  if (oldBadge) oldBadge.remove();
+  // Add score badge
+  const badge = document.createElement('div');
+  badge.className = 'ytc-badge';
+  const pct = Math.round(score * 100);
+  badge.textContent = `${pct}%`;
+  // Color: green for high, yellow for mid, red for low
+  if (score >= 0.5) {
+    badge.style.background = 'rgba(0,180,0,0.85)';
+    badge.style.color = '#fff';
+  } else if (score >= 0.2) {
+    badge.style.background = 'rgba(220,180,0,0.85)';
+    badge.style.color = '#000';
+  } else {
+    badge.style.background = 'rgba(200,0,0,0.85)';
+    badge.style.color = '#fff';
+  }
+  thumb.appendChild(badge);
+}
+
+// Remove spinner and badge from element
+function removeOverlays(element) {
+  const thumb = element.querySelector('yt-thumbnail-view-model');
+  if (!thumb) return;
+  const spinner = thumb.querySelector('.ytc-spinner');
+  if (spinner) spinner.remove();
+  const badge = thumb.querySelector('.ytc-badge');
+  if (badge) badge.remove();
+}
+
 // Get current thresholds based on strictness
 function getThresholds() {
   return STRICTNESS_MAP[currentStrictness] || STRICTNESS_MAP[3];
+}
+
+// Map score to opacity: 0.0 → 0.15, 0.5 → 0.4, 1.0 → 1.0
+// Nothing fully disappears during testing
+function scoreToOpacity(score, hide, dim) {
+  if (score >= dim) return 1.0;
+  // Map [0, dim] → [0.15, 0.4]
+  const t = score / dim;
+  return 0.15 + t * 0.25;
 }
 
 // Apply visual filter to a video element based on its score
 function applyFilter(element, score) {
   const { hide, dim } = getThresholds();
 
-  if (score < hide) {
-    element.style.display = 'none';
-    element.dataset.ytcFilter = 'hidden';
-  } else if (score < dim) {
-    element.style.opacity = '0.3';
-    element.style.transition = 'opacity 0.3s';
-    element.dataset.ytcFilter = 'dimmed';
-    // Restore on hover so user can still see/click if curious
-    element.addEventListener('mouseenter', handleHoverIn);
-    element.addEventListener('mouseleave', handleHoverOut);
-  } else {
-    element.style.opacity = '';
-    element.style.display = '';
+  element.style.transition = 'opacity 0.3s';
+
+  if (score >= dim) {
+    element.style.opacity = '1';
     element.dataset.ytcFilter = 'shown';
-    // Clean up hover listeners if previously dimmed
     element.removeEventListener('mouseenter', handleHoverIn);
     element.removeEventListener('mouseleave', handleHoverOut);
+  } else {
+    const opacity = scoreToOpacity(score, hide, dim);
+    element.style.opacity = String(opacity);
+    element.dataset.ytcFilter = 'dimmed';
+    element.addEventListener('mouseenter', handleHoverIn);
+    element.addEventListener('mouseleave', handleHoverOut);
   }
+
+  element.style.display = '';
+  replaceSpinnerWithBadge(element, score);
 }
 
 function handleHoverIn(e) {
@@ -150,7 +247,11 @@ function handleHoverIn(e) {
 
 function handleHoverOut(e) {
   if (e.currentTarget.dataset.ytcFilter === 'dimmed') {
-    e.currentTarget.style.opacity = '0.3';
+    const score = scoreMap.get(e.currentTarget);
+    if (score !== undefined) {
+      const { hide, dim } = getThresholds();
+      e.currentTarget.style.opacity = String(scoreToOpacity(score, hide, dim));
+    }
   }
 }
 
@@ -181,6 +282,7 @@ function resetAllFilters() {
     item.dataset.ytcFilter = '';
     item.removeEventListener('mouseenter', handleHoverIn);
     item.removeEventListener('mouseleave', handleHoverOut);
+    removeOverlays(item);
   });
 }
 
@@ -191,13 +293,13 @@ function clearScoredState() {
   });
 }
 
-// Hide unscored videos immediately (pending state) so user never sees unfiltered content
+// Show spinner on unscored videos while waiting for scores
 function applyPendingState(videos) {
   videos.forEach(v => {
     if (!v.element.dataset.ytcScored) {
-      v.element.style.opacity = '0';
       v.element.style.transition = 'opacity 0.3s';
       v.element.dataset.ytcFilter = 'pending';
+      addSpinner(v.element);
     }
   });
 }
@@ -261,11 +363,12 @@ async function processVideos() {
     if (response.error) {
       console.warn(`[YT-Control] Scoring error: ${response.error}`);
       lastErrorTime = Date.now();
-      // Unhide pending videos on error so page isn't blank
+      // Remove spinners and restore videos on error
       unscoredVideos.forEach(v => {
         v.element.style.opacity = '';
         v.element.style.display = '';
         v.element.dataset.ytcFilter = '';
+        removeOverlays(v.element);
       });
       console.log('[YT-Control] Will retry in 60s.');
       return;
