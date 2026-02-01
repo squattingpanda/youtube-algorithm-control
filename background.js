@@ -1,7 +1,7 @@
 // YouTube Algorithm Control - Background Service Worker
 // Phase 3: Gemini API integration for scoring videos against user preferences
 
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 // In-memory score cache: "title|channel|prefs" → score
