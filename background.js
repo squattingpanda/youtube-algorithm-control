@@ -8,6 +8,10 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GE
 const scoreCache = new Map();
 let cachedPreferences = '';
 
+// Rate limiter: enforce minimum gap between API calls (10 RPM = 6s min gap)
+const MIN_REQUEST_GAP_MS = 7000; // 7s to stay safely under 10 RPM
+let lastRequestTime = 0;
+
 // Clear cache when preferences change
 chrome.storage.onChanged.addListener((changes) => {
   if (changes.preferences) {
@@ -79,8 +83,16 @@ ${videoList}
 Respond with ONLY a JSON array of numbers, one score per video, in the same order.
 Example: [0.9, 0.2, 0.7]`;
 
-  // Single attempt — no retries here. Content script handles cooldown on 429.
-  // Retrying in the background burns through the free tier's 2 RPM quota.
+  // Rate limit: wait if we're calling too fast
+  const now = Date.now();
+  const timeSinceLast = now - lastRequestTime;
+  if (timeSinceLast < MIN_REQUEST_GAP_MS) {
+    const waitMs = MIN_REQUEST_GAP_MS - timeSinceLast;
+    console.log(`[YT-Control BG] Rate limiter: waiting ${(waitMs / 1000).toFixed(1)}s`);
+    await new Promise(r => setTimeout(r, waitMs));
+  }
+  lastRequestTime = Date.now();
+
   let lastResponse;
 
   lastResponse = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
