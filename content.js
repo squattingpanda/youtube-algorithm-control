@@ -7,6 +7,8 @@
 let currentPreferences = '';
 let filteringEnabled = true;
 let scoringInProgress = false;
+let lastErrorTime = 0;
+const ERROR_COOLDOWN = 60000; // Wait 60s before retrying after an error
 
 // Load initial settings
 chrome.storage.local.get(['preferences', 'enabled'], (data) => {
@@ -118,6 +120,13 @@ async function processVideos() {
     return;
   }
 
+  // Back off after errors (don't hammer a rate-limited API)
+  if (lastErrorTime && Date.now() - lastErrorTime < ERROR_COOLDOWN) {
+    const wait = Math.ceil((ERROR_COOLDOWN - (Date.now() - lastErrorTime)) / 1000);
+    console.log(`[YT-Control] Cooling down after error, retrying in ${wait}s`);
+    return;
+  }
+
   scoringInProgress = true;
   console.log('[YT-Control] Sending videos to Gemini for scoring...');
 
@@ -135,6 +144,8 @@ async function processVideos() {
 
     if (response.error) {
       console.warn(`[YT-Control] Scoring error: ${response.error}`);
+      lastErrorTime = Date.now();
+      console.log('[YT-Control] Will retry in 60s.');
       return;
     }
 

@@ -79,8 +79,18 @@ ${videoList}
 Respond with ONLY a JSON array of numbers, one score per video, in the same order.
 Example: [0.9, 0.2, 0.7]`;
 
-  try {
-    const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+  // Retry with exponential backoff on 429
+  const MAX_RETRIES = 3;
+  let lastResponse;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+      console.log(`[YT-Control BG] Rate limited, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${MAX_RETRIES + 1})`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+
+    lastResponse = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -88,13 +98,17 @@ Example: [0.9, 0.2, 0.7]`;
       })
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('[YT-Control BG] API error:', response.status, errText);
-      return { error: `API error ${response.status}` };
+    if (lastResponse.status !== 429) break;
+  }
+
+  try {
+    if (!lastResponse.ok) {
+      const errText = await lastResponse.text();
+      console.error('[YT-Control BG] API error:', lastResponse.status, errText);
+      return { error: `API error ${lastResponse.status}`, retryable: lastResponse.status === 429 };
     }
 
-    const json = await response.json();
+    const json = await lastResponse.json();
     const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!text) {
