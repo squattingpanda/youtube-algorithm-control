@@ -20,7 +20,7 @@ youtube extension/
 ## Implementation Phases
 1. ✅ **Phase 1: DOM Access** — Detect video thumbnails, extract titles/channels/duration, log to console
 2. ✅ **Phase 2: Basic UI** — Popup with text area for preferences, Chrome storage, on/off toggle
-3. 🔜 **Phase 3: LLM Integration** — Background script calling Claude/OpenAI API, batch scoring, caching
+3. ✅ **Phase 3: LLM Integration** — Background service worker calling Gemini 2.0 Flash API, batch scoring, caching
 4. 🔜 **Phase 4: Visual Filtering** — Hide/dim low-scoring videos, handle infinite scroll
 5. 🔜 **Phase 5: Polish** — Mood presets, filter strictness slider, performance optimization
 
@@ -89,3 +89,23 @@ Always commit changes after completing and testing any instructed change.
 
 **Next steps:**
 - Confirm Phase 2 works, then Phase 3: LLM Integration
+
+## Session: 2025-02-01 — Phase 3 Gemini LLM Integration
+**What was done:**
+- Created background.js service worker: calls Gemini 2.0 Flash API, scores videos 0-1 against preferences
+- In-memory score cache (Map keyed by title|channel|preferences), clears on pref change
+- Added API key input (password field) to popup
+- Content script now sends video batch to background, logs score table to console
+- Dedup guard prevents overlapping API calls during infinite scroll
+- Added host_permissions for generativelanguage.googleapis.com
+- Bumped version to 0.2.0
+
+**What needs testing:**
+- Reload extension → open popup → enter Gemini API key + preferences → save
+- Open YouTube → check console for "[YT-Control] Scores received:" with score table
+- Check background console (chrome://extensions → service worker link) for API call logs
+- Toggle off → no API calls
+- Change preferences → cache clears, re-scores
+
+**Next steps:**
+- Confirm Phase 3 works, then Phase 4: Visual Filtering (hide/dim low-scoring videos)
