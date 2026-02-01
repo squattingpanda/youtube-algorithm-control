@@ -19,7 +19,7 @@ youtube extension/
 
 ## Implementation Phases
 1. ✅ **Phase 1: DOM Access** — Detect video thumbnails, extract titles/channels/duration, log to console
-2. 🔜 **Phase 2: Basic UI** — Popup with text area for preferences, Chrome storage, on/off toggle
+2. ✅ **Phase 2: Basic UI** — Popup with text area for preferences, Chrome storage, on/off toggle
 3. 🔜 **Phase 3: LLM Integration** — Background script calling Claude/OpenAI API, batch scoring, caching
 4. 🔜 **Phase 4: Visual Filtering** — Hide/dim low-scoring videos, handle infinite scroll
 5. 🔜 **Phase 5: Polish** — Mood presets, filter strictness slider, performance optimization
@@ -71,4 +71,21 @@ Always commit changes after completing and testing any instructed change.
 - Phase 1 confirmed working ✅ — extension detects ~30+ videos, skips Shorts, extracts title/channel/duration/meta
 
 **Next steps:**
-- Phase 2: Basic UI (popup with preferences text area, Chrome storage, on/off toggle)
+- Phase 2 done ✅ — needs testing (reload extension, click icon, enter prefs)
+- Phase 3: LLM Integration (background script, API calls, batch scoring, caching)
+
+## Session: 2025-02-01 — Phase 2 Popup UI
+**What was done:**
+- Created popup.html with text area, toggle switch, save button (YouTube-red theme)
+- Created popup.js for load/save via chrome.storage.local
+- Updated content.js to read prefs from storage + listen for changes + respect toggle
+- Updated manifest.json with action.default_popup
+
+**What needs testing:**
+- Reload extension → click icon → popup should appear
+- Enter preferences, save, close, reopen → should persist
+- Toggle off → console shows "Filtering disabled"
+- Toggle on → normal video logging with preferences shown
+
+**Next steps:**
+- Confirm Phase 2 works, then Phase 3: LLM Integration
