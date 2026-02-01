@@ -2,6 +2,11 @@
 // Phase 1: Detect and log video thumbnails from the YouTube homepage
 // Phase 2: Read user preferences from Chrome storage
 // Phase 3: Send videos to background script for LLM scoring
+// Phase 4: Visual filtering — hide/dim low-scoring videos
+
+// Filter threshold: videos scoring below this get dimmed, well below get hidden
+const HIDE_THRESHOLD = 0.2;  // Below this → hidden entirely
+const DIM_THRESHOLD = 0.5;   // Below this → dimmed
 
 // Current state — updated from storage
 let currentPreferences = '';
@@ -23,13 +28,18 @@ chrome.storage.onChanged.addListener((changes) => {
   if (changes.preferences) {
     currentPreferences = changes.preferences.newValue || '';
     console.log(`[YT-Control] Preferences updated: "${currentPreferences}"`);
-    // Re-score with new preferences
+    // Reset all visual filters before re-scoring
+    resetAllFilters();
     processVideos();
   }
   if (changes.enabled) {
     filteringEnabled = changes.enabled.newValue !== false;
     console.log(`[YT-Control] Filtering ${filteringEnabled ? 'ON' : 'OFF'}`);
-    if (filteringEnabled) processVideos();
+    if (filteringEnabled) {
+      processVideos();
+    } else {
+      resetAllFilters();
+    }
   }
 });
 
@@ -83,7 +93,48 @@ function parseVideoElement(item) {
     : [];
   const meta = metaSpans.map(s => s.textContent.trim()).filter(Boolean).join(' · ');
 
-  return { title, channel, url, thumbnail, duration, meta };
+  // Return the DOM element too so we can apply visual filters
+  return { title, channel, url, thumbnail, duration, meta, element: item };
+}
+
+// Apply visual filter to a video element based on its score
+function applyFilter(element, score) {
+  if (score < HIDE_THRESHOLD) {
+    element.style.display = 'none';
+    element.dataset.ytcFilter = 'hidden';
+  } else if (score < DIM_THRESHOLD) {
+    element.style.opacity = '0.3';
+    element.style.transition = 'opacity 0.3s';
+    element.dataset.ytcFilter = 'dimmed';
+    // Restore on hover so user can still see/click if curious
+    element.addEventListener('mouseenter', handleHoverIn);
+    element.addEventListener('mouseleave', handleHoverOut);
+  } else {
+    element.style.opacity = '';
+    element.style.display = '';
+    element.dataset.ytcFilter = 'shown';
+  }
+}
+
+function handleHoverIn(e) {
+  e.currentTarget.style.opacity = '1';
+}
+
+function handleHoverOut(e) {
+  if (e.currentTarget.dataset.ytcFilter === 'dimmed') {
+    e.currentTarget.style.opacity = '0.3';
+  }
+}
+
+// Remove all visual filters (when disabled or preferences change)
+function resetAllFilters() {
+  document.querySelectorAll('ytd-rich-item-renderer').forEach(item => {
+    item.style.opacity = '';
+    item.style.display = '';
+    item.dataset.ytcFilter = '';
+    item.removeEventListener('mouseenter', handleHoverIn);
+    item.removeEventListener('mouseleave', handleHoverOut);
+  });
 }
 
 async function processVideos() {
@@ -103,14 +154,6 @@ async function processVideos() {
   // If no preferences set, just log the videos without scoring
   if (!currentPreferences) {
     console.log('[YT-Control] No preferences set — skipping scoring.');
-    console.table(
-      videos.map((v, i) => ({
-        '#': i + 1,
-        Title: v.title?.substring(0, 60),
-        Channel: v.channel,
-        Duration: v.duration,
-      }))
-    );
     return;
   }
 
@@ -149,12 +192,25 @@ async function processVideos() {
       return;
     }
 
-    console.log(`[YT-Control] Scores received:`);
+    // Apply visual filters and log results
+    let hidden = 0, dimmed = 0, shown = 0;
+
+    videos.forEach((v, i) => {
+      const score = response.scores[i];
+      applyFilter(v.element, score);
+      if (score < HIDE_THRESHOLD) hidden++;
+      else if (score < DIM_THRESHOLD) dimmed++;
+      else shown++;
+    });
+
+    console.log(`[YT-Control] Filtered: ${shown} shown, ${dimmed} dimmed, ${hidden} hidden`);
     console.table(
       videos.map((v, i) => ({
         '#': i + 1,
         Score: response.scores[i]?.toFixed(2),
-        Title: v.title?.substring(0, 55),
+        Filter: response.scores[i] < HIDE_THRESHOLD ? '🚫 HIDDEN'
+          : response.scores[i] < DIM_THRESHOLD ? '👻 DIMMED' : '✅ SHOWN',
+        Title: v.title?.substring(0, 50),
         Channel: v.channel,
       }))
     );
