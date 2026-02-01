@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 320px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 16px;
+      background: #fff;
+      color: #1a1a1a;
+    }
+    h1 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .toggle-label { font-size: 13px; }
+    /* Toggle switch */
+    .switch {
+      position: relative;
+      width: 40px;
+      height: 22px;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      inset: 0;
+      background: #ccc;
+      border-radius: 22px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .slider::before {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      left: 3px;
+      bottom: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .switch input:checked + .slider { background: #c00; }
+    .switch input:checked + .slider::before { transform: translateX(18px); }
+
+    textarea {
+      width: 100%;
+      height: 100px;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      resize: vertical;
+      line-height: 1.4;
+    }
+    textarea:focus { outline: none; border-color: #c00; }
+    textarea::placeholder { color: #999; }
+
+    button {
+      margin-top: 10px;
+      width: 100%;
+      padding: 8px;
+      background: #c00;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: #a00; }
+
+    .status {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #666;
+      text-align: center;
+      min-height: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>YT Algorithm Control</h1>
+
+  <div class="toggle-row">
+    <span class="toggle-label">Filtering enabled</span>
+    <label class="switch">
+      <input type="checkbox" id="enabled" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <textarea id="preferences" placeholder="Describe what you want to see, e.g.&#10;&#10;Educational investing content, long-form only, no crypto bros, no get-rich-quick"></textarea>
+
+  <button id="save">Save Preferences</button>
+  <div class="status" id="status"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

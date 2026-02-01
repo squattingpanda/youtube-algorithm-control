@@ -1,5 +1,30 @@
 // YouTube Algorithm Control - Content Script
 // Phase 1: Detect and log video thumbnails from the YouTube homepage
+// Phase 2: Read user preferences from Chrome storage
+
+// Current state — updated from storage
+let currentPreferences = '';
+let filteringEnabled = true;
+
+// Load initial settings
+chrome.storage.local.get(['preferences', 'enabled'], (data) => {
+  currentPreferences = data.preferences || '';
+  filteringEnabled = data.enabled !== false;
+  console.log(`[YT-Control] Preferences: "${currentPreferences || '(none set)'}"`);
+  console.log(`[YT-Control] Filtering: ${filteringEnabled ? 'ON' : 'OFF'}`);
+});
+
+// Listen for changes from the popup
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes.preferences) {
+    currentPreferences = changes.preferences.newValue || '';
+    console.log(`[YT-Control] Preferences updated: "${currentPreferences}"`);
+  }
+  if (changes.enabled) {
+    filteringEnabled = changes.enabled.newValue !== false;
+    console.log(`[YT-Control] Filtering ${filteringEnabled ? 'ON' : 'OFF'}`);
+  }
+});
 
 function extractVideoData() {
   const items = document.querySelectorAll('ytd-rich-item-renderer');
@@ -55,13 +80,18 @@ function parseVideoElement(item) {
 }
 
 function logVideos() {
+  if (!filteringEnabled) {
+    console.log('[YT-Control] Filtering disabled — skipping scan.');
+    return;
+  }
+
   const videos = extractVideoData();
   if (videos.length === 0) {
     console.log('[YT-Control] No videos found yet.');
     return;
   }
 
-  console.log(`[YT-Control] Found ${videos.length} videos:`);
+  console.log(`[YT-Control] Found ${videos.length} videos (prefs: "${currentPreferences || 'none'}"):`);
   console.table(
     videos.map((v, i) => ({
       '#': i + 1,

@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "description": "Steer YouTube's algorithm with natural language preferences",
   "permissions": ["storage"],
+  "action": {
+    "default_popup": "popup.html"
+  },
   "content_scripts": [
     {
       "matches": ["*://www.youtube.com/*"],
