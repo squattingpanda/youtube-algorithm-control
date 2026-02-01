@@ -12,6 +12,21 @@ let cachedPreferences = '';
 const MIN_REQUEST_GAP_MS = 7000; // 7s to stay safely under 10 RPM
 let lastRequestTime = 0;
 
+// Persist errors to storage for debugging (keeps last 10)
+async function logError(type, status, detail) {
+  const entry = {
+    time: new Date().toISOString(),
+    type,
+    status,
+    detail: typeof detail === 'string' ? detail.substring(0, 500) : String(detail),
+  };
+  console.error(`[YT-Control BG] ${type}:`, status, detail);
+  const data = await chrome.storage.local.get('errorLog');
+  const log = (data.errorLog || []).slice(-9); // keep last 9, add new one = 10
+  log.push(entry);
+  await chrome.storage.local.set({ errorLog: log });
+}
+
 // Clear cache when preferences change
 chrome.storage.onChanged.addListener((changes) => {
   if (changes.preferences) {
@@ -106,7 +121,7 @@ Example: [0.9, 0.2, 0.7]`;
   try {
     if (!lastResponse.ok) {
       const errText = await lastResponse.text();
-      console.error('[YT-Control BG] API error:', lastResponse.status, errText);
+      await logError('API error', lastResponse.status, errText);
       return { error: `API error ${lastResponse.status}`, retryable: lastResponse.status === 429 };
     }
 
@@ -122,7 +137,7 @@ Example: [0.9, 0.2, 0.7]`;
     const scores = JSON.parse(cleaned);
 
     if (!Array.isArray(scores) || scores.length !== uncached.length) {
-      console.error('[YT-Control BG] Score count mismatch:', scores.length, 'vs', uncached.length);
+      await logError('Score mismatch', null, `Got ${scores.length} scores for ${uncached.length} videos`);
       return { error: 'Score count mismatch from LLM' };
     }
 
@@ -137,7 +152,7 @@ Example: [0.9, 0.2, 0.7]`;
     return { scores: results };
 
   } catch (err) {
-    console.error('[YT-Control BG] Fetch error:', err);
+    await logError('Fetch error', null, err.message);
     return { error: err.message };
   }
 }
