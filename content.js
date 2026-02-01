@@ -3,24 +3,35 @@
 // Phase 2: Read user preferences from Chrome storage
 // Phase 3: Send videos to background script for LLM scoring
 // Phase 4: Visual filtering — hide/dim low-scoring videos
+// Phase 5: Strictness slider, performance (only score new videos, instant re-filter)
 
-// Filter threshold: videos scoring below this get dimmed, well below get hidden
-const HIDE_THRESHOLD = 0.2;  // Below this → hidden entirely
-const DIM_THRESHOLD = 0.5;   // Below this → dimmed
+// Strictness → threshold mapping
+const STRICTNESS_MAP = {
+  1: { hide: 0.05, dim: 0.2 },  // Relaxed
+  2: { hide: 0.1,  dim: 0.3 },  // Light
+  3: { hide: 0.2,  dim: 0.5 },  // Balanced (default)
+  4: { hide: 0.3,  dim: 0.7 },  // Strict
+  5: { hide: 0.5,  dim: 0.8 },  // Aggressive
+};
 
 // Current state — updated from storage
 let currentPreferences = '';
 let filteringEnabled = true;
+let currentStrictness = 3;
 let scoringInProgress = false;
 let lastErrorTime = 0;
 const ERROR_COOLDOWN = 60000; // Wait 60s before retrying after an error
 
+// Score map: DOM element → score (for instant re-filter on strictness change)
+const scoreMap = new WeakMap();
+
 // Load initial settings
-chrome.storage.local.get(['preferences', 'enabled'], (data) => {
+chrome.storage.local.get(['preferences', 'enabled', 'strictness'], (data) => {
   currentPreferences = data.preferences || '';
   filteringEnabled = data.enabled !== false;
+  currentStrictness = data.strictness || 3;
   console.log(`[YT-Control] Preferences: "${currentPreferences || '(none set)'}"`);
-  console.log(`[YT-Control] Filtering: ${filteringEnabled ? 'ON' : 'OFF'}`);
+  console.log(`[YT-Control] Filtering: ${filteringEnabled ? 'ON' : 'OFF'}, Strictness: ${currentStrictness}`);
 });
 
 // Listen for changes from the popup
@@ -28,7 +39,8 @@ chrome.storage.onChanged.addListener((changes) => {
   if (changes.preferences) {
     currentPreferences = changes.preferences.newValue || '';
     console.log(`[YT-Control] Preferences updated: "${currentPreferences}"`);
-    // Reset all visual filters before re-scoring
+    // Clear scored state — need to re-score everything with new prefs
+    clearScoredState();
     resetAllFilters();
     processVideos();
   }
@@ -40,6 +52,12 @@ chrome.storage.onChanged.addListener((changes) => {
     } else {
       resetAllFilters();
     }
+  }
+  if (changes.strictness) {
+    currentStrictness = changes.strictness.newValue || 3;
+    console.log(`[YT-Control] Strictness changed to ${currentStrictness}`);
+    // Re-apply filters from cached scores — no API call needed
+    reapplyFilters();
   }
 });
 
@@ -97,12 +115,19 @@ function parseVideoElement(item) {
   return { title, channel, url, thumbnail, duration, meta, element: item };
 }
 
+// Get current thresholds based on strictness
+function getThresholds() {
+  return STRICTNESS_MAP[currentStrictness] || STRICTNESS_MAP[3];
+}
+
 // Apply visual filter to a video element based on its score
 function applyFilter(element, score) {
-  if (score < HIDE_THRESHOLD) {
+  const { hide, dim } = getThresholds();
+
+  if (score < hide) {
     element.style.display = 'none';
     element.dataset.ytcFilter = 'hidden';
-  } else if (score < DIM_THRESHOLD) {
+  } else if (score < dim) {
     element.style.opacity = '0.3';
     element.style.transition = 'opacity 0.3s';
     element.dataset.ytcFilter = 'dimmed';
@@ -113,6 +138,9 @@ function applyFilter(element, score) {
     element.style.opacity = '';
     element.style.display = '';
     element.dataset.ytcFilter = 'shown';
+    // Clean up hover listeners if previously dimmed
+    element.removeEventListener('mouseenter', handleHoverIn);
+    element.removeEventListener('mouseleave', handleHoverOut);
   }
 }
 
@@ -126,6 +154,25 @@ function handleHoverOut(e) {
   }
 }
 
+// Re-apply filters from cached scores (instant, no API call)
+function reapplyFilters() {
+  if (!filteringEnabled) return;
+
+  let hidden = 0, dimmed = 0, shown = 0;
+  const { hide, dim } = getThresholds();
+
+  document.querySelectorAll('ytd-rich-item-renderer').forEach(item => {
+    if (!scoreMap.has(item)) return;
+    const score = scoreMap.get(item);
+    applyFilter(item, score);
+    if (score < hide) hidden++;
+    else if (score < dim) dimmed++;
+    else shown++;
+  });
+
+  console.log(`[YT-Control] Re-filtered (strictness ${currentStrictness}): ${shown} shown, ${dimmed} dimmed, ${hidden} hidden`);
+}
+
 // Remove all visual filters (when disabled or preferences change)
 function resetAllFilters() {
   document.querySelectorAll('ytd-rich-item-renderer').forEach(item => {
@@ -137,23 +184,38 @@ function resetAllFilters() {
   });
 }
 
+// Clear scored state so all videos get re-scored
+function clearScoredState() {
+  document.querySelectorAll('ytd-rich-item-renderer[data-ytc-scored]').forEach(item => {
+    delete item.dataset.ytcScored;
+  });
+}
+
 async function processVideos() {
   if (!filteringEnabled) {
     console.log('[YT-Control] Filtering disabled — skipping scan.');
     return;
   }
 
-  const videos = extractVideoData();
-  if (videos.length === 0) {
+  const allVideos = extractVideoData();
+  if (allVideos.length === 0) {
     console.log('[YT-Control] No videos found yet.');
     return;
   }
 
-  console.log(`[YT-Control] Found ${videos.length} videos.`);
+  // Only send unscored videos to the API
+  const unscoredVideos = allVideos.filter(v => !v.element.dataset.ytcScored);
 
-  // If no preferences set, just log the videos without scoring
+  console.log(`[YT-Control] Found ${allVideos.length} videos (${unscoredVideos.length} new).`);
+
+  // If no preferences set, skip scoring
   if (!currentPreferences) {
     console.log('[YT-Control] No preferences set — skipping scoring.');
+    return;
+  }
+
+  // If all videos already scored, nothing to do
+  if (unscoredVideos.length === 0) {
     return;
   }
 
@@ -171,12 +233,12 @@ async function processVideos() {
   }
 
   scoringInProgress = true;
-  console.log('[YT-Control] Sending videos to Gemini for scoring...');
+  console.log(`[YT-Control] Sending ${unscoredVideos.length} videos to Gemini for scoring...`);
 
   try {
     const response = await chrome.runtime.sendMessage({
       type: 'scoreVideos',
-      videos: videos.map(v => ({
+      videos: unscoredVideos.map(v => ({
         title: v.title,
         channel: v.channel,
         duration: v.duration,
@@ -192,24 +254,27 @@ async function processVideos() {
       return;
     }
 
-    // Apply visual filters and log results
+    // Apply visual filters, store scores, and mark as scored
+    const { hide, dim } = getThresholds();
     let hidden = 0, dimmed = 0, shown = 0;
 
-    videos.forEach((v, i) => {
+    unscoredVideos.forEach((v, i) => {
       const score = response.scores[i];
+      scoreMap.set(v.element, score);
+      v.element.dataset.ytcScored = '1';
       applyFilter(v.element, score);
-      if (score < HIDE_THRESHOLD) hidden++;
-      else if (score < DIM_THRESHOLD) dimmed++;
+      if (score < hide) hidden++;
+      else if (score < dim) dimmed++;
       else shown++;
     });
 
     console.log(`[YT-Control] Filtered: ${shown} shown, ${dimmed} dimmed, ${hidden} hidden`);
     console.table(
-      videos.map((v, i) => ({
+      unscoredVideos.map((v, i) => ({
         '#': i + 1,
         Score: response.scores[i]?.toFixed(2),
-        Filter: response.scores[i] < HIDE_THRESHOLD ? '🚫 HIDDEN'
-          : response.scores[i] < DIM_THRESHOLD ? '👻 DIMMED' : '✅ SHOWN',
+        Filter: response.scores[i] < hide ? '🚫 HIDDEN'
+          : response.scores[i] < dim ? '👻 DIMMED' : '✅ SHOWN',
         Title: v.title?.substring(0, 50),
         Channel: v.channel,
       }))

@@ -78,6 +78,47 @@
 
     .section { margin-bottom: 12px; }
 
+    /* Mood presets */
+    .presets {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .preset-btn {
+      padding: 4px 10px;
+      border: 1px solid #ddd;
+      border-radius: 14px;
+      background: #f5f5f5;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+      color: #333;
+    }
+    .preset-btn:hover {
+      background: #c00;
+      color: #fff;
+      border-color: #c00;
+    }
+
+    /* Strictness slider */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .slider-row input[type="range"] {
+      flex: 1;
+      accent-color: #c00;
+    }
+    .strictness-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #c00;
+      min-width: 70px;
+      text-align: right;
+    }
+
     button {
       margin-top: 10px;
       width: 100%;
@@ -113,8 +154,26 @@
   </div>
 
   <div class="section">
+    <label class="field">Quick Presets</label>
+    <div class="presets" id="presets">
+      <span class="preset-btn" data-preset="Educational content, tutorials, how-to guides, documentaries, in-depth explanations">🎓 Learning</span>
+      <span class="preset-btn" data-preset="Technology, programming, AI, software development, gadget reviews, no clickbait">💻 Tech</span>
+      <span class="preset-btn" data-preset="Comedy, music, cooking, travel vlogs, nature, feel-good content">😌 Relax</span>
+      <span class="preset-btn" data-preset="Productivity, business strategy, career development, industry analysis, no entertainment">💼 Work</span>
+    </div>
+  </div>
+
+  <div class="section">
     <label class="field">Preferences</label>
     <textarea id="preferences" placeholder="Describe what you want to see, e.g.&#10;&#10;Educational investing content, long-form only, no crypto bros, no get-rich-quick"></textarea>
+  </div>
+
+  <div class="section">
+    <label class="field">Filter Strictness</label>
+    <div class="slider-row">
+      <input type="range" id="strictness" min="1" max="5" value="3" step="1">
+      <span class="strictness-label" id="strictnessLabel">Balanced</span>
+    </div>
   </div>
 
   <div class="section">
