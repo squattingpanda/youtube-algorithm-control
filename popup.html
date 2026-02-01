@@ -52,19 +52,31 @@
     .switch input:checked + .slider { background: #c00; }
     .switch input:checked + .slider::before { transform: translateX(18px); }
 
-    textarea {
+    label.field {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    textarea, input[type="password"] {
       width: 100%;
-      height: 100px;
       padding: 8px;
       border: 1px solid #ddd;
       border-radius: 6px;
       font-size: 13px;
       font-family: inherit;
-      resize: vertical;
       line-height: 1.4;
     }
-    textarea:focus { outline: none; border-color: #c00; }
-    textarea::placeholder { color: #999; }
+    textarea {
+      height: 100px;
+      resize: vertical;
+    }
+    textarea:focus, input[type="password"]:focus { outline: none; border-color: #c00; }
+    textarea::placeholder, input::placeholder { color: #999; }
+
+    .section { margin-bottom: 12px; }
 
     button {
       margin-top: 10px;
@@ -100,9 +112,17 @@
     </label>
   </div>
 
-  <textarea id="preferences" placeholder="Describe what you want to see, e.g.&#10;&#10;Educational investing content, long-form only, no crypto bros, no get-rich-quick"></textarea>
+  <div class="section">
+    <label class="field">Preferences</label>
+    <textarea id="preferences" placeholder="Describe what you want to see, e.g.&#10;&#10;Educational investing content, long-form only, no crypto bros, no get-rich-quick"></textarea>
+  </div>
 
-  <button id="save">Save Preferences</button>
+  <div class="section">
+    <label class="field">Gemini API Key</label>
+    <input type="password" id="apiKey" placeholder="Enter your Gemini API key">
+  </div>
+
+  <button id="save">Save</button>
   <div class="status" id="status"></div>
 
   <script src="popup.js"></script>

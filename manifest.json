@@ -1,11 +1,15 @@
 {
   "manifest_version": 3,
   "name": "YouTube Algorithm Control",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Steer YouTube's algorithm with natural language preferences",
   "permissions": ["storage"],
+  "host_permissions": ["https://generativelanguage.googleapis.com/*"],
   "action": {
     "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
   },
   "content_scripts": [
     {

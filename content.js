@@ -1,10 +1,12 @@
 // YouTube Algorithm Control - Content Script
 // Phase 1: Detect and log video thumbnails from the YouTube homepage
 // Phase 2: Read user preferences from Chrome storage
+// Phase 3: Send videos to background script for LLM scoring
 
 // Current state — updated from storage
 let currentPreferences = '';
 let filteringEnabled = true;
+let scoringInProgress = false;
 
 // Load initial settings
 chrome.storage.local.get(['preferences', 'enabled'], (data) => {
@@ -19,10 +21,13 @@ chrome.storage.onChanged.addListener((changes) => {
   if (changes.preferences) {
     currentPreferences = changes.preferences.newValue || '';
     console.log(`[YT-Control] Preferences updated: "${currentPreferences}"`);
+    // Re-score with new preferences
+    processVideos();
   }
   if (changes.enabled) {
     filteringEnabled = changes.enabled.newValue !== false;
     console.log(`[YT-Control] Filtering ${filteringEnabled ? 'ON' : 'OFF'}`);
+    if (filteringEnabled) processVideos();
   }
 });
 
@@ -79,7 +84,7 @@ function parseVideoElement(item) {
   return { title, channel, url, thumbnail, duration, meta };
 }
 
-function logVideos() {
+async function processVideos() {
   if (!filteringEnabled) {
     console.log('[YT-Control] Filtering disabled — skipping scan.');
     return;
@@ -91,16 +96,62 @@ function logVideos() {
     return;
   }
 
-  console.log(`[YT-Control] Found ${videos.length} videos (prefs: "${currentPreferences || 'none'}"):`);
-  console.table(
-    videos.map((v, i) => ({
-      '#': i + 1,
-      Title: v.title?.substring(0, 60),
-      Channel: v.channel,
-      Duration: v.duration,
-      Meta: v.meta?.substring(0, 40),
-    }))
-  );
+  console.log(`[YT-Control] Found ${videos.length} videos.`);
+
+  // If no preferences set, just log the videos without scoring
+  if (!currentPreferences) {
+    console.log('[YT-Control] No preferences set — skipping scoring.');
+    console.table(
+      videos.map((v, i) => ({
+        '#': i + 1,
+        Title: v.title?.substring(0, 60),
+        Channel: v.channel,
+        Duration: v.duration,
+      }))
+    );
+    return;
+  }
+
+  // Avoid overlapping API calls
+  if (scoringInProgress) {
+    console.log('[YT-Control] Scoring already in progress, skipping.');
+    return;
+  }
+
+  scoringInProgress = true;
+  console.log('[YT-Control] Sending videos to Gemini for scoring...');
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'scoreVideos',
+      videos: videos.map(v => ({
+        title: v.title,
+        channel: v.channel,
+        duration: v.duration,
+        meta: v.meta,
+      })),
+      preferences: currentPreferences,
+    });
+
+    if (response.error) {
+      console.warn(`[YT-Control] Scoring error: ${response.error}`);
+      return;
+    }
+
+    console.log(`[YT-Control] Scores received:`);
+    console.table(
+      videos.map((v, i) => ({
+        '#': i + 1,
+        Score: response.scores[i]?.toFixed(2),
+        Title: v.title?.substring(0, 55),
+        Channel: v.channel,
+      }))
+    );
+  } catch (err) {
+    console.error('[YT-Control] Failed to get scores:', err);
+  } finally {
+    scoringInProgress = false;
+  }
 }
 
 // YouTube is an SPA — content loads dynamically. We use a MutationObserver
@@ -109,12 +160,12 @@ let debounceTimer = null;
 
 const observer = new MutationObserver(() => {
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(logVideos, 1500);
+  debounceTimer = setTimeout(processVideos, 2000);
 });
 
 observer.observe(document.body, { childList: true, subtree: true });
 
 // Also run once on initial load
-setTimeout(logVideos, 2000);
+setTimeout(processVideos, 2500);
 
 console.log('[YT-Control] Extension loaded. Watching for videos...');
