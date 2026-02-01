@@ -22,7 +22,7 @@ youtube extension/
 2. ✅ **Phase 2: Basic UI** — Popup with text area for preferences, Chrome storage, on/off toggle
 3. ✅ **Phase 3: LLM Integration** — Background service worker calling Gemini 2.0 Flash API, batch scoring, caching
 4. ✅ **Phase 4: Visual Filtering** — Hide/dim low-scoring videos, handle infinite scroll
-5. 🔜 **Phase 5: Polish** — Mood presets, filter strictness slider, performance optimization
+5. ✅ **Phase 5: Polish** — Mood presets, filter strictness slider, performance optimization
 
 ## Current YouTube DOM Selectors (as of Feb 2025)
 YouTube has migrated to new web components. Old selectors like `#video-title`, `ytd-channel-name` no longer work.
@@ -127,3 +127,28 @@ Always commit changes after completing and testing any instructed change.
 
 **Next steps:**
 - Phase 5: Polish (mood presets, filter strictness slider, performance optimization)
+
+## Session: 2025-02-01 — Phase 5 Polish (ALL PHASES COMPLETE)
+**What was done:**
+- Added 4 mood preset buttons: 🎓 Learning, 💻 Tech, 😌 Relax, 💼 Work
+- Added filter strictness slider (1-5: Relaxed → Aggressive)
+- Strictness controls hide/dim thresholds, re-applies instantly from cached scores (no API call)
+- Only unscored videos sent to API (data-ytc-scored tracking) — infinite scroll only scores new videos
+- WeakMap stores element→score for instant re-filter on strictness change
+- Added error logging to chrome.storage.local (last 10 errors with full API response body)
+- Added rate limiter: 7s min gap between API calls (stays under 10 RPM free tier)
+- Bumped version to 0.3.0
+- Tested live via Claude in Chrome: 4 shown, 29 hidden with pref "tech" ✅
+
+**What's working:**
+- Full MVP complete: all 5 phases implemented and tested ✅
+- Detect → Score → Filter pipeline with caching, rate limiting, error handling
+- Popup UI: presets, preferences, strictness slider, API key, toggle
+- Performance: only-score-new + instant re-filter on strictness change
+
+**Extension is MVP-complete.** Potential future work:
+- Chrome Web Store submission
+- Multiple saved preference profiles
+- Show/hide count badge on extension icon
+- Sidebar video filtering (ytd-compact-video-renderer)
+- Mobile app (WebView wrapper per brief)
