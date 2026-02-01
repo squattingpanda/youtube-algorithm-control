@@ -191,6 +191,17 @@ function clearScoredState() {
   });
 }
 
+// Hide unscored videos immediately (pending state) so user never sees unfiltered content
+function applyPendingState(videos) {
+  videos.forEach(v => {
+    if (!v.element.dataset.ytcScored) {
+      v.element.style.opacity = '0';
+      v.element.style.transition = 'opacity 0.3s';
+      v.element.dataset.ytcFilter = 'pending';
+    }
+  });
+}
+
 async function processVideos() {
   if (!filteringEnabled) {
     console.log('[YT-Control] Filtering disabled — skipping scan.');
@@ -206,18 +217,18 @@ async function processVideos() {
   // Only send unscored videos to the API
   const unscoredVideos = allVideos.filter(v => !v.element.dataset.ytcScored);
 
+  // If no preferences or nothing to score, skip
+  if (!currentPreferences || unscoredVideos.length === 0) {
+    if (!currentPreferences && unscoredVideos.length > 0) {
+      console.log('[YT-Control] No preferences set — skipping scoring.');
+    }
+    return;
+  }
+
   console.log(`[YT-Control] Found ${allVideos.length} videos (${unscoredVideos.length} new).`);
 
-  // If no preferences set, skip scoring
-  if (!currentPreferences) {
-    console.log('[YT-Control] No preferences set — skipping scoring.');
-    return;
-  }
-
-  // If all videos already scored, nothing to do
-  if (unscoredVideos.length === 0) {
-    return;
-  }
+  // Immediately hide unscored videos so there's no "flash" of unfiltered content
+  applyPendingState(unscoredVideos);
 
   // Avoid overlapping API calls
   if (scoringInProgress) {
@@ -250,6 +261,12 @@ async function processVideos() {
     if (response.error) {
       console.warn(`[YT-Control] Scoring error: ${response.error}`);
       lastErrorTime = Date.now();
+      // Unhide pending videos on error so page isn't blank
+      unscoredVideos.forEach(v => {
+        v.element.style.opacity = '';
+        v.element.style.display = '';
+        v.element.dataset.ytcFilter = '';
+      });
       console.log('[YT-Control] Will retry in 60s.');
       return;
     }
@@ -300,12 +317,12 @@ const observer = new MutationObserver(() => {
       lastVideoCount = currentCount;
       processVideos();
     }
-  }, 2000);
+  }, 800);
 });
 
 observer.observe(document.body, { childList: true, subtree: true });
 
-// Also run once on initial load
-setTimeout(processVideos, 2500);
+// Run as soon as possible on initial load
+setTimeout(processVideos, 500);
 
 console.log('[YT-Control] Extension loaded. Watching for videos...');
