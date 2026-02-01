@@ -21,7 +21,7 @@ youtube extension/
 1. ✅ **Phase 1: DOM Access** — Detect video thumbnails, extract titles/channels/duration, log to console
 2. ✅ **Phase 2: Basic UI** — Popup with text area for preferences, Chrome storage, on/off toggle
 3. ✅ **Phase 3: LLM Integration** — Background service worker calling Gemini 2.0 Flash API, batch scoring, caching
-4. 🔜 **Phase 4: Visual Filtering** — Hide/dim low-scoring videos, handle infinite scroll
+4. ✅ **Phase 4: Visual Filtering** — Hide/dim low-scoring videos, handle infinite scroll
 5. 🔜 **Phase 5: Polish** — Mood presets, filter strictness slider, performance optimization
 
 ## Current YouTube DOM Selectors (as of Feb 2025)
@@ -109,3 +109,21 @@ Always commit changes after completing and testing any instructed change.
 
 **Next steps:**
 - Confirm Phase 3 works, then Phase 4: Visual Filtering (hide/dim low-scoring videos)
+
+## Session: 2025-02-01 — Phase 4 Visual Filtering
+**What was done:**
+- Added visual filtering: score < 0.2 hidden, 0.2-0.5 dimmed (opacity 0.3), > 0.5 shown
+- Dimmed videos restore opacity on hover so user can still see/click
+- Toggle off or preference change resets all filters instantly
+- Console shows filter summary: "Filtered: X shown, Y dimmed, Z hidden"
+- Tested live via Claude in Chrome: 6 shown, 1 dimmed, 26 hidden with pref "tech" ✅
+- Fixed 429 rate limiting: removed retry loop, added 60s cooldown, MutationObserver only fires on video count change
+- Switched from gemini-2.0-flash to gemini-2.5-flash (better free tier: 10-15 RPM)
+
+**What's working:**
+- Full pipeline: detect videos → score via Gemini → hide/dim/show ✅
+- Caching works (no re-scoring same videos)
+- Infinite scroll triggers re-score only when new videos appear
+
+**Next steps:**
+- Phase 5: Polish (mood presets, filter strictness slider, performance optimization)
